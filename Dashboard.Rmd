@@ -1,0 +1,1299 @@
+---
+title: "CR Cancer Proteomics"
+output:
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    theme: lumen
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(plotly)
+library(DT)
+library(dplyr)
+library(readxl)
+library(ggplot2)
+library(ggrepel)
+library(pdftools)
+
+# --- Establish directories -----------
+base_dir <- normalizePath(file.path(getwd()), mustWork = TRUE)
+muscle_dir <- file.path(base_dir, "Muscle")
+plasma_dir <- file.path(base_dir, "Plasma")
+
+shiny::addResourcePath("muscle_gsea",
+  file.path(muscle_dir, "05_analysis", "b_results"))
+shiny::addResourcePath("plasma_gsea",
+  file.path(plasma_dir, "05_analysis", "b_results"))
+# --- Load data -----------
+# Raw Data
+raw_list <- list(
+  Muscle = read.csv(file.path(muscle_dir, 
+                              "02_normalization", 
+                              "b_reports",
+                              "00_raw_sample_summary_muscle.csv")),
+  Plasma = read.csv(file.path(plasma_dir, 
+                              "02_normalization", 
+                              "b_reports",
+                              "00_raw_sample_summary.csv"))
+)
+
+# Filtering Data
+filter_list <- list(
+  `CRE v PLA Muscle`  = read.csv(file.path(muscle_dir, 
+                                           "02_normalization", 
+                                           "b_reports",
+                                           "02_filtering_effects_CRE_muscle.csv")),
+  `CRE v PLA Plasma`  = read.csv(file.path(plasma_dir, 
+                                           "02_normalization", 
+                                           "b_reports",
+                                           "02_filtering_effects_CRE.csv")),
+  `SURV v CTL Muscle` = read.csv(file.path(muscle_dir, 
+                                           "02_normalization", 
+                                           "b_reports",
+                                           "02_filtering_effects_SURV_muscle.csv")),
+  `SURV v CTL Plasma` = read.csv(file.path(plasma_dir, 
+                                           "02_normalization", 
+                                           "b_reports",
+                                           "02_filtering_effects_SURV.csv"))
+)
+
+# Summary Data
+summary_list <- list(
+  `Muscle CRE v PLA Samples` = read.csv(file.path(muscle_dir, 
+                                           "02_normalization", 
+                                           "b_reports",
+                                           "12_sample_report_CRE_muscle.csv")),
+  `Muscle CRE v PLA Proteins` = read.csv(file.path(muscle_dir, 
+                                           "02_normalization", 
+                                           "b_reports",
+                                           "11_protein_report_CRE_muscle.csv")),
+  `Muscle SURV v CTL Samples` = read.csv(file.path(muscle_dir, 
+                                           "02_normalization", 
+                                           "b_reports",
+                                           "12_sample_report_SURV_muscle.csv")),
+  `Muscle SURV v CTL Proteins` = read.csv(file.path(muscle_dir, 
+                                           "02_normalization", 
+                                           "b_reports",
+                                           "11_protein_report_SURV_muscle.csv")),
+  `Plasma CRE v PLA Samples` = read.csv(file.path(plasma_dir, 
+                                           "02_normalization", 
+                                           "b_reports",
+                                           "11_sample_report_CRE.csv")),
+  `Plasma CRE v PLA Proteins` = read.csv(file.path(plasma_dir, 
+                                           "02_normalization", 
+                                           "b_reports",
+                                           "10_protein_report_CRE.csv")),
+  `Plasma SURV v CTL Samples` = read.csv(file.path(plasma_dir, 
+                                           "02_normalization", 
+                                           "b_reports",
+                                           "11_sample_report_SURV.csv")),
+  `Plasma SURV v CTL Proteins` = read.csv(file.path(plasma_dir, 
+                                           "02_normalization", 
+                                           "b_reports",
+                                           "10_protein_report_SURV.csv"))
+)
+
+# Limma data
+# ---- Helper to load all sheets from one file ----
+load_results <- function(filepath, sheet_names) {
+  setNames(
+    lapply(seq_along(sheet_names), function(i) {
+      read_excel(filepath, sheet = i)
+    }),
+    sheet_names
+  )
+}
+
+muscle_sheets <- c(
+  "Baseline_CREvPLA", "Training_CREvPLA", "Training_CRE", "Training_PLA",
+  "Interaction_supp", "Baseline_SURVvCTL", "Training_SURVvCTL", "Training_SURV",
+  "Baseline_FvM", "Training_FvM", "Training_F", "Training_M", "Interaction_sex"
+)
+
+plasma_sheets <- c(
+  "Baseline_CREvPLA", "Training_CREvPLA", "Training_CRE", "Training_PLA",
+  "Interaction_supp", "Baseline_SURVvCTL", "Training_SURVvCTL", "Training_SURV",
+  "Baseline_FvM", "Training_FvM", "Training_F", "Training_M", "Interaction_sex"
+)
+
+results_list <- list(
+  Muscle = load_results(
+    file.path(muscle_dir, "05_analysis", "b_results", "limma_results_all_muscle.xlsx"),
+    muscle_sheets
+  ),
+  Plasma = load_results(
+    file.path(plasma_dir, "05_analysis", "b_results", "limma_results_all_plasma.xlsx"),
+    plasma_sheets
+  )
+)
+
+# PCA Data
+pca_list <- list(
+  Muscle_SURV = readRDS(file.path(muscle_dir, "03_imputation", "c_data", "01_imputed_DAList_SURV.RDS")),
+  Muscle_CRE  = readRDS(file.path(muscle_dir, "03_imputation", "c_data", "01_imputed_DAList_CRE.RDS")),
+  Plasma_SURV = readRDS(file.path(plasma_dir, "03_imputation", "c_data", "01_imputed_DAList_SURV.RDS")),
+  Plasma_CRE  = readRDS(file.path(plasma_dir, "03_imputation", "c_data", "01_imputed_DAList_CRE.RDS"))
+)
+
+# Normalized Data (for regressions)
+
+
+  
+```
+
+```{css, echo=FALSE}
+/* Flexdashboard sidebar fix across all tabs */
+.sidebar.section.sidebar {
+  top: 51px !important;
+}
+
+/* Fallback — targets the actual rendered sidebar div */
+div[class*="sidebar"] {
+  margin-top: 0 !important;
+  padding-top: 10px !important;
+}
+
+.navbar ~ .container-fluid .section.sidebar {
+  top: 51px !important;
+  position: fixed !important;
+}
+```
+
+
+# Raw Data Processing {data-navmenu="Data" data-icon="fa-cogs"}
+
+## Sidebar {.sidebar}
+```{r sidebar1}
+# --- Sample selector ---
+selectInput("sample_1",
+  label = "Sample",
+  choices = c("Muscle", "Plasma"),
+  selected = "Muscle")
+
+# --- Dataset selector ---
+selectInput("dataset_1",
+  label = "Dataset",
+  choices = c("CRE v PLA", "SURV v CTL"),
+  selected = "CRE v PLA")
+```
+## Column {data-width=500}
+### Raw Data Summary
+``` {r valuebox1}
+valueBoxOutput("raw_summary_box")
+```
+### Raw Data - Sample Summary
+```{r raw data table}
+DTOutput("raw_table")
+```
+
+## Column {data-width=500}
+### Filtering Plot
+```{r filter plot}
+plotOutput("filter_plot")
+```
+### Filtering
+```{r filter table}
+DTOutput("filter_table")
+```
+
+```{r server1, context="server"}
+# Raw Data Summary Table
+make_raw_sample_table <- function(df) {
+  df %>%
+    dplyr::select(-1) %>%
+    dplyr::select(-cancer_time, -supp_time)
+}
+
+output$raw_table <- renderDT({
+  key <- paste(input$sample_1)
+  df <- raw_list[[key]]
+  req(df)
+  
+  make_raw_sample_table(df) %>%
+     datatable(
+      options  = list(dom = "t", pageLength = 10, ordering = FALSE),
+      rownames = FALSE
+    )
+})
+
+# Filter Table 
+output$filter_table <- renderDT({
+  key <- paste(input$dataset_1, input$sample_1)
+  df <- filter_list[[key]]
+  req(df)
+  
+  df %>% datatable(
+    options  = list(dom = "t", pageLength = 10, ordering = FALSE),
+      rownames = FALSE
+  )
+})
+
+# Filter Bar Plot
+make_filter_plot <- function(df, label) {
+  ggplot(mutate(df, step = factor(step, levels = step)), aes(x = step, y = n_after)) +
+    geom_col(fill = "steelblue", width = 0.5) +
+    geom_text(aes(label = n_after), vjust = -0.3, size = 3) +
+    labs(x = NULL, y = "Number of Proteins",
+         title = paste("Proteins Retained Through Filtering -", label)) +
+    theme_minimal(base_size = 13) +
+    theme(axis.text.x = element_text(angle = 25, hjust = 1))
+}
+
+output$filter_plot <- renderPlot({
+  key <- paste(input$dataset_1, input$sample_1)
+  df <- filter_list[[key]]
+  req(df)
+  make_filter_plot(df, input$dataset_1)
+})
+
+# Raw Data Summary Value Box
+output$raw_summary_box <- renderValueBox({
+  key_proteins <- paste(input$dataset_1, input$sample_1)
+  key_samples <- paste(input$sample_1)
+  
+  n_proteins <- filter_list[[key_proteins]] %>%
+    dplyr::slice_head(n = 1) %>%
+    pull(n_after)
+  
+  dfr <- raw_list[[key_samples]]
+  
+  n_samples <- sum(dfr$n)
+  
+  valueBox(
+    value = paste0(n_proteins, " proteins x ", n_samples, " samples"),
+    color = "primary"
+  )
+})
+```
+
+
+# Normalized Data Summary {data-navmenu="Data" data-icon="fa-table"}
+
+## Sidebar {.sidebar}
+```{r sidebar2}
+# --- Sample selector ---
+selectInput("sample_2",
+  label = "Sample",
+  choices = c("Muscle", "Plasma"),
+  selected = "Muscle")
+
+# --- Dataset selector ---
+selectInput("dataset_2",
+  label = "Dataset",
+  choices = c("CRE v PLA", "SURV v CTL"),
+  selected = "CRE v PLA")
+
+# --- Summary selector ---
+selectInput("summary",
+  label = "Summary",
+  choices = c("Samples", "Proteins"),
+  selected = "Samples")
+```
+
+## Column {data-width=650}
+### Data Summary
+```{r valuebox2}
+valueBoxOutput("data_value_box")
+```
+### Data Summary
+```{r table1}
+DTOutput("sum_table")
+```
+
+```{r server2, context="server"}
+# ---- Summary data table ----
+make_sample_summary_cre <- function(df) {
+  # Pull values
+  total    <- df$total_samples
+  n_cre_t1 <- df$n_CRE_T1;  n_cre_t2 <- df$n_CRE_T2
+  n_pla_t1 <- df$n_PLA_T1;  n_pla_t2 <- df$n_PLA_T2
+  n_paired <- df$n_paired * 2
+  n_pairs  <- df$n_paired 
+  n_unpaired <- df$n_unpaired
+  
+  # Paired T1/T2 per group = n_paired_CRE / n_paired_PLA each split evenly
+  p_cre_t1 <- df$n_paired_CRE;  p_cre_t2 <- df$n_paired_CRE
+  p_pla_t1 <- df$n_paired_PLA;  p_pla_t2 <- df$n_paired_PLA
+  
+  # Unpaired = All - Paired per cell
+  u_cre_t1 <- n_cre_t1 - p_cre_t1;  u_cre_t2 <- n_cre_t2 - p_cre_t2
+  u_pla_t1 <- n_pla_t1 - p_pla_t1;  u_pla_t2 <- n_pla_t2 - p_pla_t2
+  
+  tibble::tibble(
+    ` `      = c("All", paste0("Paired (", n_pairs, " pairs)"), "Unpaired"),
+    `n`      = c(total,   n_paired,   n_unpaired),
+    `CRE T1` = c(n_cre_t1, p_cre_t1, u_cre_t1),
+    `CRE T2` = c(n_cre_t2, p_cre_t2, u_cre_t2),
+    `PLA T1` = c(n_pla_t1, p_pla_t1, u_pla_t1),
+    `PLA T2` = c(n_pla_t2, p_pla_t2, u_pla_t2)
+  )
+}
+
+# Summary Table Function 
+make_sample_summary_surv <- function(df) {
+  # Pull values
+  total     <- df$total_samples
+  n_surv_t1 <- df$n_CRE_T1 + df$n_PLA_T1
+  n_surv_t2 <- df$n_CRE_T2 + df$n_PLA_T2
+  n_ctl_t1  <- df$n_CTL   
+  n_paired  <- df$n_paired * 2
+  n_pairs   <- df$n_paired 
+  n_unpaired <- df$n_unpaired
+  
+  # Paired T1/T2 per group = n_paired_CRE / n_paired_PLA each split evenly
+  p_surv_t1 <- df$n_paired  
+  p_surv_t2 <- df$n_paired
+  p_ctl_t1  <- NA 
+  
+  # Unpaired = All - Paired per cell
+  u_surv_t1 <- n_surv_t1 - p_surv_t1
+  u_surv_t2 <- n_surv_t2 - p_surv_t2
+  u_ctl_t1 <- n_ctl_t1 
+  
+  tibble::tibble(
+    ` `       = c("All", paste0("Paired (", n_pairs, " pairs)"), "Unpaired"),
+    `n`       = c(total,   n_paired,   n_unpaired),
+    `SURV T1` = c(n_surv_t1, p_surv_t1, u_surv_t1),
+    `SURV T2` = c(n_surv_t2, p_surv_t2, u_surv_t2),
+    `CTL T1`  = c(n_ctl_t1, p_ctl_t1, u_ctl_t1)
+  )
+}
+
+make_protein_summary_cre <- function(df) {
+  tibble::tibble(
+    ` `          = c("Total Proteins", "Complete Proteins", "Incomplete Proteins"),
+    `n`          = c(df$Total, df$Complete, df$Incomplete),
+    `% of Total` = c(paste0(round(df$Total / df$Total * 100, 1), "%"),
+                     paste0(round(df$Complete / df$Total * 100, 1), "%"),
+                     paste0(round(df$Incomplete / df$Total * 100, 1), "%"))
+  )
+}
+
+make_protein_summary_surv <- function(df) {
+  tibble::tibble(
+    ` `          = c("Total Proteins", "Complete Proteins", "Incomplete Proteins"),
+    `n`          = c(df$Total, df$Complete, df$Incomplete),
+    `% of Total` = c(paste0(round(df$Total / df$Total * 100, 1), "%"),
+                     paste0(round(df$Complete / df$Total * 100, 1), "%"),
+                     paste0(round(df$Incomplete / df$Total * 100, 1), "%"))
+  )
+}
+
+# Lookup table
+summary_builders <- list(
+  `Muscle CRE v PLA Samples`   = make_sample_summary_cre,
+  `Muscle CRE v PLA Proteins`  = make_protein_summary_cre,
+  `Muscle SURV v CTL Samples`  = make_sample_summary_surv,
+  `Muscle SURV v CTL Proteins` = make_protein_summary_surv,
+  `Plasma CRE v PLA Samples`   = make_sample_summary_cre,
+  `Plasma CRE v PLA Proteins`  = make_protein_summary_cre,
+  `Plasma SURV v CTL Samples`  = make_sample_summary_surv,
+  `Plasma SURV v CTL Proteins` = make_protein_summary_surv
+)
+
+# Summary Table Output
+output$sum_table <- renderDT({
+  key <- paste(input$sample_2, input$dataset_2, input$summary)
+  df <- summary_list[[key]] %>% dplyr::select(-1)
+  builder <- summary_builders[[key]]
+  req(df, builder)
+  
+  builder(df) %>%
+    datatable(
+      options  = list(dom = "t", pageLength = 10, ordering = FALSE),
+      rownames = FALSE
+    )
+})
+
+# Normalized Data Summary Box
+output$data_value_box <- renderValueBox({
+  key_pro <- paste(input$dataset_2, input$sample_2)
+  key_sam <- paste(input$sample_2, input$dataset_2, "Samples")
+  
+  n_pro <- filter_list[[key_pro]] %>%
+    dplyr::slice_tail(n = 1) %>%
+    pull(n_after)
+  
+  n_sam <- summary_list[[key_sam]] %>%
+    dplyr::select(-1) %>%
+    pull(total_samples)
+  
+   valueBox(
+    value = paste0(n_pro, " proteins x ", n_sam, " samples"),
+    color = "primary"
+  )
+})
+
+# ---- Comparison choices lookup ----
+comparison_choices <- list(
+  `Muscle CRE v PLA` = c(
+    "Baseline_CREvPLA", "Training_CREvPLA", "Training_CRE", "Training_PLA",
+    "Interaction_supp", "Baseline_FvM", "Training_FvM", "Training_F",
+    "Training_M", "Interaction_sex"
+  ),
+  `Muscle SURV v CTL` = c(
+    "Baseline_SURVvCTL", "Training_SURVvCTL", "Training_SURV"
+  ),
+  `Plasma CRE v PLA` = c(
+    "Baseline_CREvPLA", "Training_CREvPLA", "Training_CRE", "Training_PLA",
+    "Interaction_supp", "Baseline_FvM", "Training_FvM", "Training_F",
+    "Training_M", "Interaction_sex"
+  ),
+  `Plasma SURV v CTL` = c(
+    "Baseline_SURVvCTL", "Training_SURVvCTL", "Training_SURV"
+  )
+)
+
+# Comparison Selector UI
+output$comparison_ui <- renderUI({
+  key     <- paste(input$sample_3, input$dataset_3)
+  choices <- comparison_choices[[key]]
+  req(choices)
+  selectInput("comparison",
+    label    = "Comparison",
+    choices  = choices,
+    selected = choices[1])
+})
+```
+
+# Volcano Plots {data-navmenu="Outputs" data-icon="fa-volcano"}
+## Sidebar {.sidebar}
+```{r sidebar3}
+# --- Sample selector ---
+selectInput("sample_3",
+  label = "Sample",
+  choices = c("Muscle", "Plasma"),
+  selected = "Muscle")
+
+# --- Dataset selector ---
+selectInput("dataset_3",
+  label = "Dataset",
+  choices = c("CRE v PLA", "SURV v CTL"),
+  selected = "CRE v PLA")
+
+# --- Comparison selector ---
+uiOutput("comparison_ui")
+
+hr()
+
+# --- p-value type ---
+radioButtons("pval_type",
+  label    = "P-value type",
+  choices  = c("Raw p-value" = "P.Value", 
+               "Adjusted p-value" = "adj.P.Val",
+               "Adjusted Pi-value (Xiao)" = "adj.Pi.Val"),
+  selected = "adj.P.Val"
+)
+
+# --- Thresholds ---
+sliderInput("pval_thresh",
+  label = "P-value threshold",
+  min = 0.01, max = 0.1, value = 0.05, step = 0.01
+)
+
+sliderInput("logfc_thresh",
+  label = "|logFC| threshold",
+  min = 0, max = 1, value = 0.6, step = 0.1
+)
+
+hr()
+
+# --- Optional: colour by significance ---
+checkboxInput("colour_sig", "Colour by significance", value = TRUE)
+```
+
+## Column {data-width=650}
+### Volcano Plot
+```{r volcano}
+plotlyOutput("volcano_plot")
+```
+
+## Column {data-width=350}
+### Significant Proteins
+```{r table}
+DTOutput("sig_table")
+```
+
+### Summary
+```{r summary}
+verbatimTextOutput("summary_text")
+```
+
+```{r server3, context="server"}
+
+# ---- Reactive: filtered dataset ----
+dat <- reactive({
+  req(input$comparison, input$sample_3)
+  df <- results_list[[input$sample_3]][[input$comparison]]
+  req(df)
+  df$pval_used <- df[[input$pval_type]]
+  df$sig <- df$pval_used < input$pval_thresh & abs(df$logFC) > input$logfc_thresh
+  df$direction <- ifelse(!df$sig, "ns",
+                    ifelse(df$logFC > 0, "up", "down"))
+  df
+})
+
+# ---- Volcano plot ----
+output$volcano_plot <- renderPlotly({
+  df <- dat()
+  
+  colour_map <- c("up" = "#e63946", "down" = "turquoise3", "ns" = "#adb5bd")
+  
+  p <- plot_ly(df,
+    x = ~logFC,
+    y = ~-log10(pval_used),
+    type = "scatter", mode = "markers",
+    color = if (input$colour_sig) ~direction else I("#adb5bd"),
+    colors = colour_map,
+    text = ~paste0("<b>", gene, "</b><br>",
+                   description, "<br>",
+                   "logFC: ", round(logFC, 3), "<br>",
+                   "p: ", signif(pval_used, 3)),
+    hoverinfo = "text",
+    marker = list(size = 6, opacity = 0.75)
+  ) %>%
+    layout(
+      title  = input$comparison,
+      xaxis  = list(title = "log2 Fold Change",
+                    zeroline = TRUE),
+      yaxis  = list(title = paste0("-log10(", input$pval_type, ")")),
+      shapes = list(
+        # vertical logFC lines
+        list(type="line", x0=input$logfc_thresh,  x1=input$logfc_thresh,
+             y0=0, y1=1, yref="paper",
+             line=list(dash="dot", color="grey")),
+        list(type="line", x0=-input$logfc_thresh, x1=-input$logfc_thresh,
+             y0=0, y1=1, yref="paper",
+             line=list(dash="dot", color="grey")),
+        # horizontal p-value line
+        list(type="line", x0=0, x1=1, xref="paper",
+             y0=-log10(input$pval_thresh), y1=-log10(input$pval_thresh),
+             line=list(dash="dot", color="grey"))
+      ),
+      legend = list(title = list(text = "Direction"))
+    )
+  p
+})
+
+# ---- Significant proteins table ----
+output$sig_table <- renderDT({
+  dat() %>%
+    filter(sig) %>%
+    select(description, gene, logFC, pval_used, direction) %>%
+    arrange(pval_used) %>%
+    rename("Protein" = description, "Gene" = gene, "FC" = logFC,
+           "p-value" = pval_used, "Direction" = direction) %>%
+    mutate(across(where(is.numeric), ~signif(.x, 3))) %>%
+    datatable(options = list(pageLength = 10, dom = "tp"),
+              rownames = FALSE)
+}, server = FALSE)
+
+# ---- Summary text ----
+output$summary_text <- renderText({
+  df  <- dat()
+  up  <- sum(df$direction == "up",   na.rm = TRUE)
+  dn  <- sum(df$direction == "down", na.rm = TRUE)
+  tot <- nrow(df)
+  paste0(
+    "Comparison: ",    input$comparison, "\n",
+    "Total proteins: ", tot, "\n",
+    "Up-regulated: ",   up,  "\n",
+    "Down-regulated: ", dn,  "\n",
+    "logFC cutoff: ±",  input$logfc_thresh, "\n",
+    input$pval_type, " < ", input$pval_thresh
+  )
+})
+```
+
+# Pathway Analysis {data-navmenu="Outputs" data-icon="fa-chart-bar"}
+## Sidebar {.sidebar}
+```{r sidebar4}
+# --- Sample selector ---
+selectInput("sample_4",
+  label = "Sample",
+  choices = c("Muscle", "Plasma"),
+  selected = "Muscle")
+
+# --- Dataset selector ---
+selectInput("dataset_4",
+  label = "Dataset",
+  choices = c("CRE v PLA", "SURV v CTL"),
+  selected = "SURV v CTL")
+
+# --- Comparison selector ---
+uiOutput("comparison_ui2")
+
+# --- Pathway selectors ---
+selectInput("analysis",
+             label = "Analysis",
+             choices = c("GSEA", "ORA"),
+             selected = "GSEA")
+
+uiOutput("ont_ui")
+```
+
+## Column {width = 1000}
+### Plot:
+```{r gsea}
+imageOutput("gsea_plot")
+```
+
+```{r server4, context="server"}
+# ---- Comparison choices lookup ----
+comparison_choices <- list(
+  `Muscle CRE v PLA` = c(
+    "Baseline_CREvPLA", "Training_CREvPLA", "Training_CRE", "Training_PLA",
+    "Interaction_supp", "Baseline_FvM", "Training_FvM", "Training_F",
+    "Training_M", "Interaction_sex"
+  ),
+  `Muscle SURV v CTL` = c(
+    "Baseline_SURVvCTL", "Training_SURVvCTL", "Training_SURV"
+  ),
+  `Plasma CRE v PLA` = c(
+    "Baseline_CREvPLA", "Training_CREvPLA", "Training_CRE", "Training_PLA",
+    "Interaction_supp", "Baseline_FvM", "Training_FvM", "Training_F",
+    "Training_M", "Interaction_sex"
+  ),
+  `Plasma SURV v CTL` = c(
+    "Baseline_SURVvCTL", "Training_SURVvCTL", "Training_SURV"
+  )
+)
+
+output$comparison_ui2 <- renderUI({
+  key     <- paste(input$sample_4, input$dataset_4)
+  choices <- comparison_choices[[key]]
+  req(choices)
+  selectInput("comparison_2",
+    label    = "Comparison",
+    choices  = choices,
+    selected = choices[1])
+})
+
+ont_choices <- list(
+  GSEA = c("BP", "CC", "MF", "hallmark", "KEGG", "KEGG_ridge"),
+  ORA = c("BP", "CC", "MF")
+)
+
+output$ont_ui <- renderUI({
+  key <- input$analysis
+  choices <- ont_choices[[key]]
+  req(choices)
+  selectInput("ont",
+              label = "Gene Ontology",
+              choices = choices,
+              selected = choices[1])
+})
+
+output$gsea_plot <- renderImage({
+  req(input$sample_4, input$dataset_4, input$comparison_2, input$analysis, input$ont)
+  
+  gsea_dir <- if (input$sample_4 == "Muscle") muscle_dir else plasma_dir
+  comp_dir <- if (input$dataset_4 == "CRE v PLA") "CREvPLA" else "SURVvCTL"
+  go_dir   <- if (input$analysis == "GSEA") "GSEA" else "ORA"
+  fname    <- if (input$analysis =="GSEA") 
+    sprintf("GSEA_%s_%s.pdf", input$ont, input$comparison_2) else
+      sprintf("ORA_GO_%s_bar_%s.pdf", input$ont, input$comparison_2)
+  pdf_path <- file.path(gsea_dir, "05_analysis", "b_results", comp_dir, go_dir, fname)
+  
+  req(file.exists(pdf_path))
+  
+  # Convert first page of PDF to a temp PNG
+  png_path <- tempfile(fileext = ".png")
+  pdftools::pdf_convert(pdf_path, format = "png", pages = 1,
+                        filenames = png_path, dpi = 150)
+  
+ img_info <- pdftools::pdf_pagesize(pdf_path)
+ aspect   <- img_info$height[1] / img_info$width[1]
+
+ list(
+   src         = png_path,
+   contentType = "image/png",
+   width       = "100%",
+   height      = paste0(round(800 * aspect), "px")  # scales to actual proportions
+)
+}, deleteFile = TRUE)   # TRUE so temp PNGs are cleaned up automatically
+```
+
+# Scatter Plots {data-navmenu="Outputs" data-icon="fa-border-none"}
+## Sidebar {.sidebar}
+```{r}
+selectInput("sample_5",
+            label = "Sample",
+            choices = c("Muscle", "Plasma"),
+            selected = "Muscle")
+
+uiOutput("concordance_ui")
+```
+
+## Column {width = 1000}
+### Scatter Plot
+```{r}
+plotlyOutput("scatter")
+```
+
+```{r server5, context="server"}
+# comparison choices
+concordance_choices <- list(
+  Muscle = c(
+    "Sex (F vs M)"            = "FvM",
+    "Supplement (CRE vs PLA)" = "CREvPLA",
+    "Survivors (T1 vs T2)"    = "SURVvCTL"
+  ),
+  Plasma = c(
+    "Sex (F vs M)"            = "FvM",
+    "Supplement (CRE vs PLA)" = "CREvPLA",
+    "Survivors (T1 vs T2)"    = "SURVvCTL"
+  )
+)
+
+output$concordance_ui <- renderUI({
+  selectInput("concordance_comparison", "Comparison:",
+    choices = concordance_choices[[input$sample_5]])
+})
+
+# Prepare Data Function
+prep_cord <- function(df, label) {
+  df %>%
+    dplyr::select(gene, logFC, adj.P.Val) %>%
+    dplyr::rename(
+      !!paste0("logFC_",   label) := logFC,
+      !!paste0("adj.P.Val_", label) := adj.P.Val
+    ) %>%
+    mutate(!!paste0("signif_", label) := .data[[paste0("adj.P.Val_", label)]] < 0.05)
+}
+
+# Pre-prepare all datasets once
+# Reactive cord_data based on sample
+cord_data <- reactive({
+  req(input$sample_5)
+  src <- results_list[[input$sample_5]]
+  
+  if (input$sample_5 == "Muscle") {
+    list(
+      F       = prep_cord(src$Training_F,          "F"),
+      M       = prep_cord(src$Training_M,          "M"),
+      CRE     = prep_cord(src$Training_CRE,        "CRE"),
+      PLA     = prep_cord(src$Training_PLA,        "PLA"),
+      SURV_T1 = prep_cord(src$Baseline_SURVvCTL,   "SURV_T1"),
+      SURV_T2 = prep_cord(src$Training_SURVvCTL,   "SURV_T2")
+    )
+  } else {
+    list(
+      F       = prep_cord(src$Training_F,          "F"),
+      M       = prep_cord(src$Training_M,          "M"),
+      CRE     = prep_cord(src$Training_CRE,        "CRE"),
+      PLA     = prep_cord(src$Training_PLA,        "PLA"),
+      SURV_T1 = prep_cord(src$Baseline_SURVvCTL,   "SURV_T1"),
+      SURV_T2 = prep_cord(src$Training_SURVvCTL,   "SURV_T2")
+    )
+  }
+})
+
+
+# Build Plots
+plot_concordance <- function(df1, df2, label1, label2, title) {
+  
+  col1 <- paste0("logFC_", label1)
+  col2 <- paste0("logFC_", label2)
+  sig1 <- paste0("signif_", label1)
+  sig2 <- paste0("signif_", label2)
+  
+  cord <- inner_join(df1, df2, by = "gene") %>%
+    mutate(
+      sig_group = case_when(
+        .data[[sig1]] & .data[[sig2]]  ~ "Both significant",
+        .data[[sig1]] & !.data[[sig2]] ~ paste0(label1, " only"),
+        !.data[[sig1]] & .data[[sig2]] ~ paste0(label2, " only"),
+        TRUE                           ~ "Neither"
+      )
+    )
+
+  groups <- list(
+    list(name = "Both significant",        color = "purple",  opacity = 1),
+    list(name = paste0(label1, " only"),   color = "red",     opacity = 1),
+    list(name = paste0(label2, " only"),   color = "blue",    opacity = 1),
+    list(name = "Neither",                 color = "grey2", opacity = 0.7)
+  )
+
+  x_range <- range(cord[[col1]], na.rm = TRUE)
+  y_range <- range(cord[[col2]], na.rm = TRUE)
+  pad     <- 0.1
+  xmin <- x_range[1] - pad; xmax <- x_range[2] + pad
+  ymin <- y_range[1] - pad; ymax <- y_range[2] + pad
+
+  p <- plot_ly() %>%
+    
+    # --- Quadrant shading ---
+    add_trace(type = "scatter", mode = "none", inherit = FALSE,
+          fill = "toself",
+          fillcolor = "rgba(999,999,999,0.1)",
+          x = c(0, xmax, xmax, 0), y = c(0, 0, ymax, ymax),
+          showlegend = FALSE, hoverinfo = "none") %>%
+    add_trace(type = "scatter", mode = "none", inherit = FALSE,
+          fill = "toself",
+          fillcolor = "rgba(999,999,999,0.1)",
+          x = c(xmin, 0, 0, xmin), y = c(ymin, ymin, 0, 0),
+          showlegend = FALSE, hoverinfo = "none") %>%
+    add_trace(type = "scatter", mode = "none", inherit = FALSE,
+          fill = "toself",
+          fillcolor = "rgba(0,0,0,0.1)",
+          x = c(0, xmax, xmax, 0), y = c(ymin, ymin, 0, 0),
+          showlegend = FALSE, hoverinfo = "none") %>%
+    add_trace(type = "scatter", mode = "none", inherit = FALSE,
+          fill = "toself",
+          fillcolor = "rgba(0,0,0,0.1)",
+          x = c(xmin, 0, 0, xmin), y = c(0, 0, ymax, ymax),
+          showlegend = FALSE, hoverinfo = "none") %>%
+
+    # --- Quadrant labels ---
+    add_annotations(x = xmax, y = ymax, text = paste("UP", label1, "&", label2),
+                    xanchor = "right", yanchor = "top",
+                    font = list(color = "darkgreen", size = 11), showarrow = FALSE) %>%
+    add_annotations(x = xmin, y = ymin, text = paste("DOWN", label1, "&", label2),
+                    xanchor = "left", yanchor = "bottom",
+                    font = list(color = "darkgreen", size = 11), showarrow = FALSE) %>%
+    add_annotations(x = xmax, y = ymin, text = paste0("UP ", label1, " / DOWN ", label2),
+                    xanchor = "right", yanchor = "bottom",
+                    font = list(color = "steelblue", size = 11), showarrow = FALSE) %>%
+    add_annotations(x = xmin, y = ymax, text = paste0("UP ", label2, " / DOWN ", label1),
+                    xanchor = "left", yanchor = "top",
+                    font = list(color = "red", size = 11), showarrow = FALSE)
+
+  # --- One trace per group ---
+  for (g in groups) {
+    d <- cord[cord$sig_group == g$name, ]
+    p <- add_trace(p,
+      data      = d,
+      type      = "scatter", mode = "markers",
+      x         = ~.data[[col1]],
+      y         = ~.data[[col2]],
+      name      = g$name,
+      marker    = list(color = g$color, size = 7, opacity = g$opacity),
+      text      = ~paste0("<b>", gene, "</b><br>",
+                          label1, " logFC: ", round(.data[[col1]], 3), "<br>",
+                          label2, " logFC: ", round(.data[[col2]], 3), "<br>",
+                          "Signif: ", sig_group),
+      hoverinfo = "text"
+    )
+  }
+
+  p %>% layout(
+    title     = list(text = title, font = list(size = 14)),
+    xaxis     = list(title = paste(label1, "(logFC)"), zeroline = TRUE,
+                     zerolinecolor = "grey", range = c(xmin, xmax)),
+    yaxis     = list(title = paste(label2, "(logFC)"), zeroline = TRUE,
+                     zerolinecolor = "grey", range = c(ymin, ymax)),
+    legend    = list(title = list(text = "Significant DE")),
+    shapes    = list(
+      list(type = "line", x0 = 0, x1 = 0, y0 = ymin, y1 = ymax,
+           line = list(color = "grey60", dash = "dash", width = 1)),
+      list(type = "line", x0 = xmin, x1 = xmax, y0 = 0, y1 = 0,
+           line = list(color = "grey60", dash = "dash", width = 1))
+    ),
+    hovermode = "closest"
+  )
+}
+
+# Plot Output
+output$scatter <- renderPlotly({
+  req(input$concordance_comparison, input$sample_5)
+  cd <- cord_data()
+  
+  switch(input$concordance_comparison,
+    FvM      = plot_concordance(cd$F,       cd$M,       "F",       "M",       paste("Sex Comparison -",        input$sample_5)),
+    CREvPLA  = plot_concordance(cd$CRE,     cd$PLA,     "CRE",     "PLA",     paste("Supplement Comparison -", input$sample_5)),
+    SURVvCTL = plot_concordance(cd$SURV_T1, cd$SURV_T2, "SURV_T1", "SURV_T2", paste("SURV v CTL -",           input$sample_5))
+  )
+})
+```
+
+# PCA {data-navmenu="Outputs" data-icon="fa-circle-dot"}
+## Sidebar {.sidebar}
+```{r}
+selectInput("sample_6",
+            label = "Sample",
+            choices = c("Muscle", "Plasma"),
+            selected = "Muscle")
+
+selectInput("dataset_6",
+            label = "Dataset",
+            choices = c("CRE v PLA", "SURV v CTL"),
+            selected = "SURV v CTL")
+
+uiOutput("pca_color_ui")
+```
+
+## Column {width = 1000}
+### PCA Plot
+```{r}
+plotlyOutput("pca_plot")
+```
+
+```{r server6, context="server"}
+
+# Dynamic color_by choices based on dataset
+output$pca_color_ui <- renderUI({
+  choices <- if (input$dataset_6 == "SURV v CTL") {
+    c("Cancer & Time" = "cancer_time", "Cancer" = "cancer")
+  } else {
+    c("Supplement & Time" = "supp_time", 
+      "Supplement" = "supp", 
+      "Time" = "timepoint",
+      "Sex" = "sex",
+      "Sex & Time" = "sex_time")
+  }
+  selectInput("pca_color", label = "Colour by", choices = choices)
+})
+
+# PCA ellipse helper
+compute_ellipse <- function(x, y, level = 0.95, n = 100) {
+  if (length(x) < 3) return(NULL)
+  tryCatch({
+    fit    <- MASS::cov.trob(cbind(x, y), nu = length(x) - 1)
+    center <- fit$center
+    cov    <- fit$cov
+    eigen  <- eigen(cov)
+    chi2   <- qchisq(level, df = 2)
+    angles <- seq(0, 2 * pi, length.out = n)
+    circle <- cbind(cos(angles), sin(angles))
+    ellipse <- t(center + t(circle %*% (sqrt(chi2) * t(chol(cov)))))
+    data.frame(x = ellipse[, 1], y = ellipse[, 2])
+  }, error = function(e) NULL)
+}
+
+# Hex-to-rgba Helper
+grp_to_rgba <- function(col, alpha = 0.1) {
+  rgb_vals <- col2rgb(col) / 255
+  sprintf("rgba(%s,%s,%s,%s)",
+          round(rgb_vals[1] * 255),
+          round(rgb_vals[2] * 255),
+          round(rgb_vals[3] * 255),
+          alpha)
+}
+
+# PCA Plot Output
+output$pca_plot <- renderPlotly({
+  req(input$sample_6, input$dataset_6, input$pca_color)
+  
+  key      <- paste0(input$sample_6, "_", if (input$dataset_6 == "CRE v PLA") "CRE" else "SURV")
+  dal      <- pca_list[[key]]
+  mat      <- dal$data
+  meta     <- dal$metadata
+  color_by <- input$pca_color
+  
+  pca     <- prcomp(t(mat), scale. = TRUE)
+  var_exp <- round(summary(pca)$importance[2, 1:2] * 100, 1)
+  
+  pca_df <- as.data.frame(pca$x[, 1:2]) %>%
+    tibble::rownames_to_column("sample_id") %>%
+    left_join(meta, by = "sample_id")
+  
+  groups  <- unique(pca_df[[color_by]])
+  palette <- setNames(RColorBrewer::brewer.pal(max(3, length(groups)), "Set1")[seq_along(groups)], groups)
+
+  p <- plot_ly()
+
+  for (grp in groups) {
+    d     <- pca_df[pca_df[[color_by]] == grp, ]
+    col   <- palette[[grp]]
+    ell   <- compute_ellipse(d$PC1, d$PC2)
+
+    # Ellipse
+    if (!is.null(ell)) {
+      p <- add_trace(p,
+        x          = ell$x, y = ell$y,
+        type       = "scatter", mode = "lines",
+        line       = list(color = col, width = 1.5, dash = "solid"),
+        fill       = "toself",
+        fillcolor  = paste0(grp_to_rgba(col, 0.1)),
+        name       = grp,
+        showlegend = FALSE,
+        hoverinfo  = "skip"
+      )
+    }
+
+    # Points
+    p <- add_trace(p,
+      x         = d$PC1, y = d$PC2,
+      type      = "scatter", mode = "markers",
+      name      = grp,
+      marker    = list(color = col, size = 8),
+      text      = paste0("<b>", d$sample_id, "</b><br>", color_by, ": ", d[[color_by]]),
+      hoverinfo = "text"
+    )
+  }
+
+  p %>% layout(
+    title  = list(text = paste(input$sample_6, "-", input$dataset_6), font = list(size = 14)),
+    xaxis  = list(title = paste0("PC1 (", var_exp[1], "%)")),
+    yaxis  = list(title = paste0("PC2 (", var_exp[2], "%)")),
+    legend = list(title = list(text = color_by))
+  )
+})
+```
+
+# DE Summary {data-navmenu="Outputs" data-icon="fa-bar-chart"}
+## Sidebar {.sidebar}
+```{r}
+selectInput("sample_7",
+            label = "Sample",
+            choices = c("Muscle", "Plasma"),
+            selected = "Muscle")
+
+selectInput("dataset_7",
+            label = "Dataset",
+            choices = c("CRE v PLA", "SURV v CTL"),
+            selected = "SURV v CTL")
+
+uiOutput("comparison_ui7")
+
+hr()
+
+radioButtons("pval_type_7",
+  label   = "P-value type",
+  choices = c("Raw p-value"              = "P.Value",
+              "Adjusted p-value"         = "adj.P.Val",
+              "Adjusted π-value (Xiao)" = "adj.Pi.Val"),
+  selected = "adj.P.Val"
+)
+
+sliderInput("pval_thresh_7",
+  label = "P-value threshold",
+  min = 0.01, max = 0.1, value = 0.05, step = 0.01
+)
+
+sliderInput("logfc_thresh_7",
+  label = "|logFC| threshold",
+  min = 0, max = 1, value = 0.0, step = 0.1
+)
+```
+
+## Column {width = 1000}
+### DE Summary
+```{r}
+plotlyOutput("de_bar")
+```
+
+```{r server7, context="server"}
+
+comparison_choices_7 <- list(
+  `Muscle CRE v PLA` = c(
+    "Baseline_CREvPLA", "Training_CREvPLA", "Training_CRE", "Training_PLA",
+    "Interaction_supp", "Baseline_FvM", "Training_FvM", "Training_F",
+    "Training_M", "Interaction_sex"
+  ),
+  `Muscle SURV v CTL` = c(
+    "Baseline_SURVvCTL", "Training_SURVvCTL", "Training_SURV"
+  ),
+  `Plasma CRE v PLA` = c(
+    "Baseline_CREvPLA", "Training_CREvPLA", "Training_CRE", "Training_PLA",
+    "Interaction_supp", "Baseline_FvM", "Training_FvM", "Training_F",
+    "Training_M", "Interaction_sex"
+  ),
+  `Plasma SURV v CTL` = c(
+    "Baseline_SURVvCTL", "Training_SURVvCTL", "Training_SURV"
+  )
+)
+
+output$comparison_ui7 <- renderUI({
+  key     <- paste(input$sample_7, input$dataset_7)
+  choices <- comparison_choices_7[[key]]
+  req(choices)
+  checkboxGroupInput("comparisons_7",
+    label    = "Comparisons",
+    choices  = choices,
+    selected = choices
+  )
+})
+
+output$de_bar <- renderPlotly({
+  req(input$comparisons_7, input$sample_7, input$pval_type_7)
+
+  # --- Build summary across selected comparisons ---
+  summary_df <- lapply(input$comparisons_7, function(comp) {
+    df <- results_list[[input$sample_7]][[comp]]
+    req(df)
+    df %>%
+      mutate(
+        pval_used = .data[[input$pval_type_7]],
+        sig       = pval_used < input$pval_thresh_7 & abs(logFC) > input$logfc_thresh_7,
+        direction = ifelse(!sig, "ns", ifelse(logFC > 0, "Up", "Down"))
+      ) %>%
+      summarise(
+        Up   =  sum(direction == "Up",   na.rm = TRUE),
+        Down = -sum(direction == "Down", na.rm = TRUE)  # negative for downward bars
+      ) %>%
+      mutate(comparison = comp)
+  }) %>%
+    bind_rows() %>%
+    tidyr::pivot_longer(cols = c(Up, Down), names_to = "direction", values_to = "n") %>%
+    mutate(comparison = factor(comparison, levels = input$comparisons_7))
+
+  plot_ly(summary_df,
+    x         = ~comparison,
+    y         = ~n,
+    color     = ~direction,
+    colors    = c("Up" = "#e63946", "Down" = "turquoise3"),
+    type      = "bar",
+    text      = ~paste0(direction, ": ", abs(n)),
+    hoverinfo = "text"
+  ) %>%
+    layout(
+      barmode  = "relative",
+      title    = list(text = paste(input$sample_7, "-", input$dataset_7), font = list(size = 14)),
+      xaxis    = list(title = "Comparison", tickangle = -35),
+      yaxis    = list(title = "Number of Proteins",
+                      tickvals = NULL,
+                      ticktext = NULL),
+      legend   = list(title = list(text = "Direction")),
+      shapes   = list(
+        list(type = "line", x0 = -0.5, x1 = length(input$comparisons_7) - 0.5,
+             y0 = 0, y1 = 0,
+             line = list(color = "black", width = 1))
+      )
+    ) %>%
+    # Fix y axis labels to show absolute values
+    layout(yaxis = list(
+      tickmode = "auto",
+      tickformat = ",.0f",
+      title = "Number of Proteins"
+    ))
+})
+```
+
+# Venn Diagrams {data-navmenu="Outputs" data-icon="fa-circle"}
+## Sidebar {.sidebar}
+```{r sidebar8}
+selectInput("sample_8",
+            label = "Sample",
+            choices = c("Muscle", "Plasma"),
+            selected = "Muscle")
+
+selectInput("dataset_8",
+            label = "Dataset",
+            choices = c("CRE v PLA", "SURV v CTL"),
+            selected = "SURV v CTL")
+```
+## Column {width = 1000}
+### Venn
+```{r venn_output}
+imageOutput("venn")
+```
+
+```{r server8, context="server"}
+output$venn <- renderImage({
+  req(input$sample_8, input$dataset_8)
+  
+  samp_dir <- if (input$sample_8 == "Muscle") muscle_dir else plasma_dir
+  data_dir <- if (input$dataset_8 == "SURV v CTL") "SURVvCTL" else "CREvPLA"
+  vname    <- sprintf("venn_%s_proteins.pdf", data_dir) 
+  pdf_path <- file.path(samp_dir, "05_analysis", "b_results", data_dir, "plots", "venns", vname)
+  
+  req(file.exists(pdf_path))
+  
+  # Convert first page of PDF to a temp PNG
+  png_path <- tempfile(fileext = ".png")
+  pdftools::pdf_convert(pdf_path, format = "png", pages = 1,
+                        filenames = png_path, dpi = 150)
+  
+ img_info <- pdftools::pdf_pagesize(pdf_path)
+ aspect   <- img_info$height[1] / img_info$width[1]
+
+ list(
+   src         = png_path,
+   contentType = "image/png",
+   width       = "100%",
+   height      = paste0(round(800 * aspect), "px")  # scales to actual proportions
+)
+}, deleteFile = TRUE)   # TRUE so temp PNGs are cleaned up automatically
+```
+
+# HPA-Plasma {data-navmenu="Outputs" data-icon="fa-chart-bar"}
+## Column {data-width=650}
+### Scatter Plot
+```{r}
+plotlyOutput("hpa_plot", height = "550px")
+```
+
+## Column {data-width=350}
+### Summary
+```{r}
+verbatimTextOutput("hpa_summary")
+tableOutput("hpa_table")
+```
+```{r server_hpa, context="server"}
+
+# ── Load & prep HPA data (done once, outside reactives) ──────────────────────
+hpa <- read.csv(file.path(plasma_dir, "01_input", "HPA_CRCvHEALTHY_plasma.csv")) %>%
+  dplyr::rename(
+    gene      = Protein,
+    logFC_HPA = NPX.fold.change,
+    padj_HPA  = p.adjusted
+  ) %>%
+  mutate(logFC_HPA = as.numeric(logFC_HPA))
+
+# ── Reactive: join HPA with limma results ────────────────────────────────────
+hpa_compared <- reactive({
+  my_results <- results_list[["Plasma"]][["Baseline_SURVvCTL"]] %>%
+    dplyr::select(gene, logFC, adj.P.Val) %>%
+    dplyr::rename(logFC_limma = logFC, padj_limma = adj.P.Val)
+
+  inner_join(hpa, my_results, by = "gene") %>%
+    mutate(
+      direction_HPA   = ifelse(logFC_HPA   > 0, "up", "down"),
+      direction_limma = ifelse(logFC_limma > 0, "up", "down"),
+      agreement       = ifelse(direction_HPA == direction_limma, "Concordant", "Discordant")
+    )
+})
+
+# ── Plot ──────────────────────────────────────────────────────────────────────
+output$hpa_plot <- renderPlotly({
+  compared <- hpa_compared()
+  
+  p <- ggplot(compared, aes(x = logFC_HPA, y = logFC_limma, color = agreement,
+                             text = paste0("", gene, "<br>",
+                                          "HPA logFC: ",   round(logFC_HPA,   3), "<br>",
+                                          "Limma logFC: ", round(logFC_limma, 3), "<br>",
+                                          "HPA padj: ",    signif(padj_HPA,  3), "<br>",
+                                          "Agreement: ",   agreement))) +
+    geom_point(size = 3, alpha = 0.85) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey60") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
+    scale_color_manual(values = c("Concordant" = "#2166AC", "Discordant" = "#D62728")) +
+    labs(
+      x     = "CRC v Healthy logFC (HPA)",
+      y     = "SURV v CTL logFC (ours)",
+      title = "HPA vs Our Results",
+      color = "Direction"
+    ) +
+    theme_bw(base_size = 12) +
+    theme(plot.title = element_text(face = "bold", hjust = 0.5))
+  
+  ggplotly(p, tooltip = "text")
+})
+
+# ── Summary text ──────────────────────────────────────────────────────────────
+output$hpa_summary <- renderText({
+  compared <- hpa_compared()
+  paste0(
+    "Proteins in HPA:        ", nrow(hpa), "\n",
+    "Proteins in limma:      ", nrow(results_list[["Plasma"]][["Baseline_SURVvCTL"]]), "\n",
+    "Overlap:                ", nrow(compared), "\n",
+    "Concordant:             ", sum(compared$agreement == "Concordant"), "\n",
+    "Discordant:             ", sum(compared$agreement == "Discordant")
+  )
+})
+
+# ── Table: HPA proteins not in your data ─────────────────────────────────────
+output$hpa_table <- renderTable({
+  anti_join(hpa, results_list[["Plasma"]][["Baseline_SURVvCTL"]], by = "gene") %>%
+    dplyr::select(gene, logFC_HPA, padj_HPA) %>%
+    dplyr::rename("Gene" = gene, "HPA logFC" = logFC_HPA, "HPA padj" = padj_HPA) %>%
+    mutate(across(where(is.numeric), ~signif(.x, 3)))
+}, caption = "HPA proteins not in your dataset")
+```
+
