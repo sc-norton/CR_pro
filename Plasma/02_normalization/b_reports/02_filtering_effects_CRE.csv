@@ -1,0 +1,4 @@
+step,n_before,n_after,n_removed,pct_retained
+Raw input,NA,569,NA,100
+Contaminant removal,569,554,15,97.4
+Missingness filter,554,330,224,58

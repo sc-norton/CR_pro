@@ -1,0 +1,8 @@
+dataset = CRE
+proteins = 330
+samples = 22
+pct_missing = 4.9
+n_MAR = 0
+n_MNAR = 115
+best_method = bpca
+best_NRMSE = 0.174

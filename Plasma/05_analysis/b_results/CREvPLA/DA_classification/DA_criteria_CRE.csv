@@ -1,0 +1,16 @@
+"comparison","method","n_UP","n_DOWN"
+"Baseline_CREvPLA","BH-adj P-val",0,0
+"Training_CREvPLA","BH-adj P-val",0,0
+"Training_CRE","BH-adj P-val",0,0
+"Training_PLA","BH-adj P-val",0,0
+"Interaction","BH-adj P-val",0,0
+"Baseline_CREvPLA","Nominal P-val",6,1
+"Training_CREvPLA","Nominal P-val",6,3
+"Training_CRE","Nominal P-val",5,3
+"Training_PLA","Nominal P-val",16,3
+"Interaction","Nominal P-val",2,2
+"Baseline_CREvPLA","Pi-value",0,0
+"Training_CREvPLA","Pi-value",0,0
+"Training_CRE","Pi-value",0,0
+"Training_PLA","Pi-value",1,0
+"Interaction","Pi-value",0,0

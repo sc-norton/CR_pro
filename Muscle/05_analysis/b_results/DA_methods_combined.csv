@@ -1,0 +1,40 @@
+"comparison","method","n_UP","n_DOWN"
+"Baseline_CREvPLA","BH-adj P-val",0,0
+"Training_CREvPLA","BH-adj P-val",0,2
+"Training_CRE","BH-adj P-val",2,0
+"Training_PLA","BH-adj P-val",0,2
+"Interaction_supp","BH-adj P-val",0,0
+"Baseline_CREvPLA","Nominal P-val",27,28
+"Training_CREvPLA","Nominal P-val",30,56
+"Training_CRE","Nominal P-val",48,31
+"Training_PLA","Nominal P-val",75,36
+"Interaction_supp","Nominal P-val",32,51
+"Baseline_CREvPLA","Pi-value",0,0
+"Training_CREvPLA","Pi-value",1,6
+"Training_CRE","Pi-value",5,0
+"Training_PLA","Pi-value",2,4
+"Interaction_supp","Pi-value",1,3
+"Baseline_SURVvCTL","BH-adj P-val",207,60
+"Training_SURVvCTL","BH-adj P-val",281,115
+"Training_SURV","BH-adj P-val",9,1
+"Baseline_SURVvCTL","Nominal P-val",230,68
+"Training_SURVvCTL","Nominal P-val",290,118
+"Training_SURV","Nominal P-val",43,9
+"Baseline_SURVvCTL","Pi-value",190,45
+"Training_SURVvCTL","Pi-value",266,99
+"Training_SURV","Pi-value",4,0
+"Baseline_FvM","BH-adj P-val",0,0
+"Training_FvM","BH-adj P-val",0,0
+"Training_F","BH-adj P-val",2,0
+"Training_M","BH-adj P-val",0,0
+"Interaction_sex","BH-adj P-val",0,0
+"Baseline_FvM","Nominal P-val",50,46
+"Training_FvM","Nominal P-val",49,35
+"Training_F","Nominal P-val",62,25
+"Training_M","Nominal P-val",29,24
+"Interaction_sex","Nominal P-val",23,22
+"Baseline_FvM","Pi-value",0,0
+"Training_FvM","Pi-value",1,1
+"Training_F","Pi-value",4,0
+"Training_M","Pi-value",2,0
+"Interaction_sex","Pi-value",0,0

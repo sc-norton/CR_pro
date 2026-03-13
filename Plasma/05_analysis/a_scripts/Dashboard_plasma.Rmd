@@ -1,0 +1,182 @@
+---
+title: "Proteomics Analysis Dashboard - PLASMA"
+output:
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    theme: flatly
+runtime: shiny
+---
+
+Differential Abundance {data-icon="fa-volcano"}
+=====================================
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(plotly)
+library(DT)
+library(dplyr)
+library(readxl)
+library(ggVennDiagram)
+
+base_dir <- normalizePath(file.path(dirname(getwd()), "."), mustWork = TRUE)
+results_dir <- file.path(base_dir, "b_results")
+# ---- Load your results ----
+# Each df should have columns: protein, logFC, P.Value, adj.P.Val, label
+results_list <- list(
+Baseline_CREvPLA = read_excel(file.path(results_dir, "limma_results_all_plasma.xlsx"), sheet = 1),
+Training_CREvPLA = read_excel(file.path(results_dir, "limma_results_all_plasma.xlsx"), sheet = 2),
+Training_CRE = read_excel(file.path(results_dir, "limma_results_all_plasma.xlsx"), sheet = 3),
+Training_PLA = read_excel(file.path(results_dir, "limma_results_all_plasma.xlsx"), sheet = 4),
+Interaction = read_excel(file.path(results_dir, "limma_results_all_plasma.xlsx"), sheet = 5),
+Baseline_SURVvCTL = read_excel(file.path(results_dir, "limma_results_all_plasma.xlsx"), sheet = 6),
+Training_SURVvCTL = read_excel(file.path(results_dir, "limma_results_all_plasma.xlsx"), sheet = 7),
+Training_SURV = read_excel(file.path(results_dir, "limma_results_all_plasma.xlsx"), sheet = 8))
+
+  
+```
+
+Sidebar {.sidebar}
+-----------------------------------------------------------------------
+```{r sidebar}
+# --- Comparison selector ---
+selectInput("comparison",
+  label    = "Comparison",
+  choices  = names(results_list),
+  selected = names(results_list)[1]
+)
+
+hr()
+
+# --- p-value type ---
+radioButtons("pval_type",
+  label    = "P-value type",
+  choices  = c("Raw p-value" = "P.Value", "Adjusted p-value" = "adj.P.Val"),
+  selected = "adj.pvalue"
+)
+
+# --- Thresholds ---
+sliderInput("pval_thresh",
+  label = "P-value threshold",
+  min = 0.01, max = 0.1, value = 0.05, step = 0.01
+)
+
+sliderInput("logfc_thresh",
+  label = "|logFC| threshold",
+  min = 0, max = 1, value = 0.6, step = 0.1
+)
+
+hr()
+
+# --- Optional: colour by significance ---
+checkboxInput("colour_sig", "Colour by significance", value = TRUE)
+```
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Volcano Plot
+```{r volcano}
+plotlyOutput("volcano_plot")
+```
+
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Significant Proteins
+```{r table}
+DTOutput("sig_table")
+```
+
+### Summary
+```{r summary}
+verbatimTextOutput("summary_text")
+```
+
+```{r server, context="server"}
+
+# ---- Reactive: filtered dataset ----
+dat <- reactive({
+  df <- results_list[[input$comparison]]
+  df$pval_used <- df[[input$pval_type]]
+  df$sig <- df$pval_used < input$pval_thresh & abs(df$logFC) > input$logfc_thresh
+  df$direction <- ifelse(!df$sig, "ns",
+                    ifelse(df$logFC > 0, "up", "down"))
+  df
+})
+
+# ---- Volcano plot ----
+output$volcano_plot <- renderPlotly({
+  df <- dat()
+  
+  colour_map <- c("up" = "#e63946", "down" = "turquoise3", "ns" = "#adb5bd")
+  
+  p <- plot_ly(df,
+    x = ~logFC,
+    y = ~-log10(pval_used),
+    type = "scatter", mode = "markers",
+    color = if (input$colour_sig) ~direction else I("#adb5bd"),
+    colors = colour_map,
+    text = ~paste0("<b>", gene, "</b><br>",
+                   description, "<br>",
+                   "logFC: ", round(logFC, 3), "<br>",
+                   "p: ", signif(pval_used, 3)),
+    hoverinfo = "text",
+    marker = list(size = 6, opacity = 0.75)
+  ) %>%
+    layout(
+      title  = input$comparison,
+      xaxis  = list(title = "log2 Fold Change",
+                    zeroline = TRUE),
+      yaxis  = list(title = paste0("-log10(", input$pval_type, ")")),
+      shapes = list(
+        # vertical logFC lines
+        list(type="line", x0=input$logfc_thresh,  x1=input$logfc_thresh,
+             y0=0, y1=1, yref="paper",
+             line=list(dash="dot", color="grey")),
+        list(type="line", x0=-input$logfc_thresh, x1=-input$logfc_thresh,
+             y0=0, y1=1, yref="paper",
+             line=list(dash="dot", color="grey")),
+        # horizontal p-value line
+        list(type="line", x0=0, x1=1, xref="paper",
+             y0=-log10(input$pval_thresh), y1=-log10(input$pval_thresh),
+             line=list(dash="dot", color="grey"))
+      ),
+      legend = list(title = list(text = "Direction"))
+    )
+  p
+})
+
+# ---- Significant proteins table ----
+output$sig_table <- renderDT({
+  dat() %>%
+    filter(sig) %>%
+    select(description, gene, logFC, pval_used, direction) %>%
+    arrange(pval_used) %>%
+    rename("Protein" = description, "Gene" = gene, "FC" = logFC,
+           "p-value" = pval_used, "Direction" = direction) %>%
+    mutate(across(where(is.numeric), ~signif(.x, 3))) %>%
+    datatable(options = list(pageLength = 10, dom = "tp"),
+              rownames = FALSE)
+}, server = FALSE)
+
+# ---- Summary text ----
+output$summary_text <- renderText({
+  df  <- dat()
+  up  <- sum(df$direction == "up",   na.rm = TRUE)
+  dn  <- sum(df$direction == "down", na.rm = TRUE)
+  tot <- nrow(df)
+  paste0(
+    "Comparison: ",    input$comparison, "\n",
+    "Total proteins: ", tot, "\n",
+    "Up-regulated: ",   up,  "\n",
+    "Down-regulated: ", dn,  "\n",
+    "logFC cutoff: ±",  input$logfc_thresh, "\n",
+    input$pval_type, " < ", input$pval_thresh
+  )
+})
+
+# ---- Venn Plot ----
+
+```

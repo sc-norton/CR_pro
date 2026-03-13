@@ -1,0 +1,16 @@
+"comparison","method","n_UP","n_DOWN"
+"Baseline_FvM","BH-adj P-val",0,0
+"Training_FvM","BH-adj P-val",0,0
+"Training_F","BH-adj P-val",2,0
+"Training_M","BH-adj P-val",0,0
+"Interaction_sex","BH-adj P-val",0,0
+"Baseline_FvM","Nominal P-val",50,46
+"Training_FvM","Nominal P-val",49,35
+"Training_F","Nominal P-val",62,25
+"Training_M","Nominal P-val",29,24
+"Interaction_sex","Nominal P-val",23,22
+"Baseline_FvM","Pi-value",0,0
+"Training_FvM","Pi-value",1,1
+"Training_F","Pi-value",4,0
+"Training_M","Pi-value",2,0
+"Interaction_sex","Pi-value",0,0

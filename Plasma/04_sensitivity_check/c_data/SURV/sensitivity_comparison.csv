@@ -1,0 +1,13 @@
+method,norm,imputation,mean_spearman,rho_Baseline_SURVvCTL,rho_Training_SURVvCTL,rho_Training_SURV,n_DEP_Baseline_SURVvCTL,n_DEP_Training_SURVvCTL,n_DEP_Training_SURV
+vsn_RF,vsn,RF,0.985,0.9863,0.9878,0.9808,0,17,0
+rlr_RF,rlr,RF,0.9838,0.9861,0.9871,0.9782,0,22,0
+vsn_knn,vsn,knn,0.9834,0.9844,0.98740000000000006,0.9784,0,17,0
+rlr_knn,rlr,knn,0.9823,0.9837,0.9868,0.9764,0,20,0
+cycloess_RF,cycloess,RF,0.9817,0.9841,0.984,0.977,0,18,0
+rlr_none,rlr,none,0.9812,0.9845,0.9858,0.9733,0,19,0
+cycloess_knn,cycloess,knn,0.9805,0.9803,0.983,0.9782,0,19,0
+vsn_none,vsn,none,0.9804,0.9845,0.9853,0.9715,0,15,0
+cycloess_none,cycloess,none,0.9784,0.982,0.9823,0.971,0,18,0
+vsn_bpca,vsn,bpca,0.9782,0.9765,0.9828,0.9754,1,30,0
+rlr_bpca,rlr,bpca,0.9767,0.9758,0.9821,0.9723,1,37,0
+cycloess_bpca,cycloess,bpca,0.9761,0.9731,0.9796,0.9755,1,33,0

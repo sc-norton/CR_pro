@@ -1,0 +1,392 @@
+---
+title: "CR Cancer Proteomics - MUSCLE"
+output:
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    theme: flatly
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(plotly)
+library(DT)
+library(dplyr)
+library(readxl)
+
+base_dir <- normalizePath(file.path(dirname(getwd()), ".."), mustWork = TRUE)
+muscle_dir <- file.path(base_dir, "05_analysis", "b_results")
+plasma_dir
+# --- Load data -----------
+# Raw Data
+raw_list <- list(
+  Muscle = read.csv(file.path(base_dir, 
+                              "02_normalization", 
+                              "b_reports",
+                              "00_raw_sample_summary_muscle.csv"))
+)
+
+# Filtering Data
+filter_list <- list(
+  `CRE v PLA Muscle`  = read.csv(file.path(base_dir, 
+                                           "02_normalization", 
+                                           "b_reports",
+                                           "02_filtering_effects_CRE_muscle.csv")),
+  `CRE v PLA Plasma`  = read.csv(file.path(base_dir, 
+                                           "02_normalization", 
+                                           "b_reports",
+                                           "02_filtering_effects_CRE_muscle.csv")),
+  `SURV v CTL Muscle` =
+  `SURV v CTL Plasma` =
+)
+
+# Summary Data
+summary_list <- list(
+  `CRE v PLA Samples` = read.csv(file.path(base_dir, 
+                                           "02_normalization", 
+                                           "b_reports",
+                                           "12_sample_report_CRE_muscle.csv")),
+  `CRE v PLA Proteins` = read.csv(file.path(base_dir, 
+                                           "02_normalization", 
+                                           "b_reports",
+                                           "11_protein_report_CRE_muscle.csv")),
+  `SURV v CTL Samples` = read.csv(file.path(base_dir, 
+                                           "02_normalization", 
+                                           "b_reports",
+                                           "12_sample_report_SURV_muscle.csv")),
+  `SURV v CTL Proteins` = read.csv(file.path(base_dir, 
+                                           "02_normalization", 
+                                           "b_reports",
+                                           "11_protein_report_SURV_muscle.csv"))
+)
+
+# Limma data
+results_list <- list(
+`Baseline CREvPLA` = read_excel(file.path(results_dir, "limma_results_all_muscle.xlsx"), sheet = 1),
+`Training CREvPLA` = read_excel(file.path(results_dir, "limma_results_all_muscle.xlsx"), sheet = 2),
+`Training CRE` = read_excel(file.path(results_dir, "limma_results_all_muscle.xlsx"), sheet = 3),
+`Training PLA` = read_excel(file.path(results_dir, "limma_results_all_muscle.xlsx"), sheet = 4),
+`Interaction (supp)` = read_excel(file.path(results_dir, "limma_results_all_muscle.xlsx"), sheet = 5),
+`Baseline SURVvCTL` = read_excel(file.path(results_dir, "limma_results_all_muscle.xlsx"), sheet = 6),
+`Training SURVvCTL` = read_excel(file.path(results_dir, "limma_results_all_muscle.xlsx"), sheet = 7),
+`Training SURV` = read_excel(file.path(results_dir, "limma_results_all_muscle.xlsx"), sheet = 8),
+`Baseline FvM` = read_excel(file.path(results_dir, "limma_results_all_muscle.xlsx"), sheet = 9),
+`Training FvM` = read_excel(file.path(results_dir, "limma_results_all_muscle.xlsx"), sheet = 10),
+`Training F` = read_excel(file.path(results_dir, "limma_results_all_muscle.xlsx"), sheet = 11),
+`Training M` = read_excel(file.path(results_dir, "limma_results_all_muscle.xlsx"), sheet = 12),
+`Interaction (sex)` = read_excel(file.path(results_dir, "limma_results_all_muscle.xlsx"), sheet = 13)
+)
+
+# Normalized Data (for regressions)
+
+
+  
+```
+
+Data Processing {data-icon="fa-cogs"}
+=====================================
+Sidebar {.sidebar}
+--------------------------------------------------------------------
+```{r sidebar1}
+# --- Sample selector ---
+selectInput("sample",
+  label = "Sample",
+  choices = c("Muscle", "Plasma"),
+  selected = "Muscle")
+
+# --- Dataset selector ---
+selectInput("dataset",
+  label = "Dataset",
+  choices = c("CRE v PLA", "SURV v CTL"),
+  selected = "CRE v PLA")
+```
+Column {data-width=500}
+-----------------------------------------------------------------------
+### Raw Data
+```{r rawdata}
+DTOutput("raw_table")
+```
+Column {data-width=500}
+-----------------------------------------------------------------------
+### Filtering
+```{r filtering}
+DTOutput("filter_table")
+```
+Data Summary {data-icon="fa-table"}
+====================================
+Sidebar {.sidebar}
+---------------------------------------------------------------------
+```{r sidebar2}
+# --- Sample selector ---
+selectInput("sample",
+  label = "Sample",
+  choices = c("Muscle", "Plasma"),
+  selected = "Muscle")
+
+# --- Dataset selector ---
+selectInput("dataset",
+  label = "Dataset",
+  choices = c("CRE v PLA", "SURV v CTL"),
+  selected = "CRE v PLA")
+
+# --- Summary selector ---
+selectInput("summary",
+  label = "Summary",
+  choices = c("Samples", "Proteins"),
+  selected = "Samples")
+```
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+### Data Summary
+```{r table1}
+DTOutput("sum_table")
+```
+
+Differential Abundance {data-icon="fa-volcano"}
+=====================================
+
+Sidebar {.sidebar}
+-----------------------------------------------------------------------
+```{r sidebar3}
+# --- Comparison selector ---
+selectInput("comparison",
+  label    = "Comparison",
+  choices  = names(results_list),
+  selected = names(results_list)[1]
+)
+
+hr()
+
+# --- p-value type ---
+radioButtons("pval_type",
+  label    = "P-value type",
+  choices  = c("Raw p-value" = "P.Value", 
+               "Adjusted p-value" = "adj.P.Val",
+               "Adjusted Pi-value (Xiao)" = "adj.Pi.Val"),
+  selected = "adj.P.Val"
+)
+
+# --- Thresholds ---
+sliderInput("pval_thresh",
+  label = "P-value threshold",
+  min = 0.01, max = 0.1, value = 0.05, step = 0.01
+)
+
+sliderInput("logfc_thresh",
+  label = "|logFC| threshold",
+  min = 0, max = 1, value = 0.6, step = 0.1
+)
+
+hr()
+
+# --- Optional: colour by significance ---
+checkboxInput("colour_sig", "Colour by significance", value = TRUE)
+```
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Volcano Plot
+```{r volcano}
+plotlyOutput("volcano_plot")
+```
+
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Significant Proteins
+```{r table}
+DTOutput("sig_table")
+```
+
+### Summary
+```{r summary}
+verbatimTextOutput("summary_text")
+```
+
+
+```{r server, context="server"}
+
+# ---- Reactive: filtered dataset ----
+dat <- reactive({
+  df <- results_list[[input$comparison]]
+  df$pval_used <- df[[input$pval_type]]
+  df$sig <- df$pval_used < input$pval_thresh & abs(df$logFC) > input$logfc_thresh
+  df$direction <- ifelse(!df$sig, "ns",
+                    ifelse(df$logFC > 0, "up", "down"))
+  df
+})
+
+# ---- Volcano plot ----
+output$volcano_plot <- renderPlotly({
+  df <- dat()
+  
+  colour_map <- c("up" = "#e63946", "down" = "turquoise3", "ns" = "#adb5bd")
+  
+  p <- plot_ly(df,
+    x = ~logFC,
+    y = ~-log10(pval_used),
+    type = "scatter", mode = "markers",
+    color = if (input$colour_sig) ~direction else I("#adb5bd"),
+    colors = colour_map,
+    text = ~paste0("<b>", gene, "</b><br>",
+                   description, "<br>",
+                   "logFC: ", round(logFC, 3), "<br>",
+                   "p: ", signif(pval_used, 3)),
+    hoverinfo = "text",
+    marker = list(size = 6, opacity = 0.75)
+  ) %>%
+    layout(
+      title  = input$comparison,
+      xaxis  = list(title = "log2 Fold Change",
+                    zeroline = TRUE),
+      yaxis  = list(title = paste0("-log10(", input$pval_type, ")")),
+      shapes = list(
+        # vertical logFC lines
+        list(type="line", x0=input$logfc_thresh,  x1=input$logfc_thresh,
+             y0=0, y1=1, yref="paper",
+             line=list(dash="dot", color="grey")),
+        list(type="line", x0=-input$logfc_thresh, x1=-input$logfc_thresh,
+             y0=0, y1=1, yref="paper",
+             line=list(dash="dot", color="grey")),
+        # horizontal p-value line
+        list(type="line", x0=0, x1=1, xref="paper",
+             y0=-log10(input$pval_thresh), y1=-log10(input$pval_thresh),
+             line=list(dash="dot", color="grey"))
+      ),
+      legend = list(title = list(text = "Direction"))
+    )
+  p
+})
+
+# ---- Significant proteins table ----
+output$sig_table <- renderDT({
+  dat() %>%
+    filter(sig) %>%
+    select(description, gene, logFC, pval_used, direction) %>%
+    arrange(pval_used) %>%
+    rename("Protein" = description, "Gene" = gene, "FC" = logFC,
+           "p-value" = pval_used, "Direction" = direction) %>%
+    mutate(across(where(is.numeric), ~signif(.x, 3))) %>%
+    datatable(options = list(pageLength = 10, dom = "tp"),
+              rownames = FALSE)
+}, server = FALSE)
+
+# ---- Summary text ----
+output$summary_text <- renderText({
+  df  <- dat()
+  up  <- sum(df$direction == "up",   na.rm = TRUE)
+  dn  <- sum(df$direction == "down", na.rm = TRUE)
+  tot <- nrow(df)
+  paste0(
+    "Comparison: ",    input$comparison, "\n",
+    "Total proteins: ", tot, "\n",
+    "Up-regulated: ",   up,  "\n",
+    "Down-regulated: ", dn,  "\n",
+    "logFC cutoff: ±",  input$logfc_thresh, "\n",
+    input$pval_type, " < ", input$pval_thresh
+  )
+})
+
+# ---- Summary data table ----
+make_sample_summary_cre <- function(df) {
+  # Pull values
+  total    <- df$total_samples
+  n_cre_t1 <- df$n_CRE_T1;  n_cre_t2 <- df$n_CRE_T2
+  n_pla_t1 <- df$n_PLA_T1;  n_pla_t2 <- df$n_PLA_T2
+  n_paired <- df$n_paired * 2
+  n_pairs  <- df$n_paired 
+  n_unpaired <- df$n_unpaired
+  
+  # Paired T1/T2 per group = n_paired_CRE / n_paired_PLA each split evenly
+  p_cre_t1 <- df$n_paired_CRE;  p_cre_t2 <- df$n_paired_CRE
+  p_pla_t1 <- df$n_paired_PLA;  p_pla_t2 <- df$n_paired_PLA
+  
+  # Unpaired = All - Paired per cell
+  u_cre_t1 <- n_cre_t1 - p_cre_t1;  u_cre_t2 <- n_cre_t2 - p_cre_t2
+  u_pla_t1 <- n_pla_t1 - p_pla_t1;  u_pla_t2 <- n_pla_t2 - p_pla_t2
+  
+  tibble::tibble(
+    ` `      = c("All", paste0("Paired (", n_pairs, " pairs)"), "Unpaired"),
+    `n`      = c(total,   n_paired,   n_unpaired),
+    `CRE T1` = c(n_cre_t1, p_cre_t1, u_cre_t1),
+    `CRE T2` = c(n_cre_t2, p_cre_t2, u_cre_t2),
+    `PLA T1` = c(n_pla_t1, p_pla_t1, u_pla_t1),
+    `PLA T2` = c(n_pla_t2, p_pla_t2, u_pla_t2)
+  )
+}
+
+make_sample_summary_surv <- function(df) {
+  # Pull values
+  total     <- df$total_samples
+  n_surv_t1 <- df$n_CRE_T1 + df$n_PLA_T1
+  n_surv_t2 <- df$n_CRE_T2 + df$n_PLA_T2
+  n_ctl_t1  <- df$n_CTL   
+  n_paired  <- df$n_paired * 2
+  n_pairs   <- df$n_paired 
+  n_unpaired <- df$n_unpaired
+  
+  # Paired T1/T2 per group = n_paired_CRE / n_paired_PLA each split evenly
+  p_surv_t1 <- df$n_paired  
+  p_surv_t2 <- df$n_paired
+  p_ctl_t1  <- NA 
+  
+  # Unpaired = All - Paired per cell
+  u_surv_t1 <- n_surv_t1 - p_surv_t1
+  u_surv_t2 <- n_surv_t2 - p_surv_t2
+  u_ctl_t1 <- n_ctl_t1 
+  
+  tibble::tibble(
+    ` `       = c("All", paste0("Paired (", n_pairs, " pairs)"), "Unpaired"),
+    `n`       = c(total,   n_paired,   n_unpaired),
+    `SURV T1` = c(n_surv_t1, p_surv_t1, u_surv_t1),
+    `SURV T2` = c(n_surv_t2, p_surv_t2, u_surv_t2),
+    `CTL T1`  = c(n_ctl_t1, p_ctl_t1, u_ctl_t1)
+  )
+}
+
+make_protein_summary_cre <- function(df) {
+  tibble::tibble(
+    ` `          = c("Total Proteins", "Complete Proteins", "Incomplete Proteins"),
+    `n`          = c(df$Total, df$Complete, df$Incomplete),
+    `% of Total` = c(paste0(round(df$Total / df$Total * 100, 1), "%"),
+                     paste0(round(df$Complete / df$Total * 100, 1), "%"),
+                     paste0(round(df$Incomplete / df$Total * 100, 1), "%"))
+  )
+}
+
+make_protein_summary_surv <- function(df) {
+  tibble::tibble(
+    ` `          = c("Total Proteins", "Complete Proteins", "Incomplete Proteins"),
+    `n`          = c(df$Total, df$Complete, df$Incomplete),
+    `% of Total` = c(paste0(round(df$Total / df$Total * 100, 1), "%"),
+                     paste0(round(df$Complete / df$Total * 100, 1), "%"),
+                     paste0(round(df$Incomplete / df$Total * 100, 1), "%"))
+  )
+}
+
+# Lookup table
+summary_builders <- list(
+  `CRE v PLA Samples`   = make_sample_summary_cre,
+  `CRE v PLA Proteins`  = make_protein_summary_cre,
+  `SURV v CTL Samples`  = make_sample_summary_surv,
+  `SURV v CTL Proteins` = make_protein_summary_surv
+)
+
+output$sum_table <- renderDT({
+  key <- paste(input$dataset, input$summary)
+  df <- summary_list[[key]] %>% dplyr::select(-1)
+  builder <- summary_builders[[key]]
+  req(df, builder)
+  
+  builder(df) %>%
+    datatable(
+      options  = list(dom = "t", pageLength = 10, ordering = FALSE),
+      rownames = FALSE
+    )
+})
+```

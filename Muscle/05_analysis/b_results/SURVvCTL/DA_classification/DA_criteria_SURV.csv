@@ -1,0 +1,10 @@
+"comparison","method","n_UP","n_DOWN"
+"Baseline_SURVvCTL","BH-adj P-val",207,60
+"Training_SURVvCTL","BH-adj P-val",281,115
+"Training_SURV","BH-adj P-val",9,1
+"Baseline_SURVvCTL","Nominal P-val",230,68
+"Training_SURVvCTL","Nominal P-val",290,118
+"Training_SURV","Nominal P-val",43,9
+"Baseline_SURVvCTL","Pi-value",190,45
+"Training_SURVvCTL","Pi-value",266,99
+"Training_SURV","Pi-value",4,0

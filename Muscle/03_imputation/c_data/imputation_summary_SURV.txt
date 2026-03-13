@@ -1,0 +1,8 @@
+dataset = SURV
+proteins = 1957
+samples = 39
+pct_missing = 7.06
+n_MAR = 581
+n_MNAR = 500
+best_method = bpca
+best_NRMSE = 0.1609
